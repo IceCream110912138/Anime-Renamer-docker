@@ -18,5 +18,5 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com
 EXPOSE 8000
 
 # 6. 启动程序
-# 必须使用 0.0.0.0 才能让外部通过 NAS IP 访问
+# 必须用 0.0.0.0 才能让外部通过 NAS IP 访问
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
