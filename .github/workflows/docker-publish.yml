@@ -3,6 +3,7 @@ name: Build and Push Docker Image (x86 only)
 on:
   push:
     branches: [ "master", "main" ]
+  workflow_dispatch:
     paths:
       - '**.py'
       - 'static/**'
