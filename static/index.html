@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime Renamer Web v2.0</title>
+    <!-- 引入 Bootstrap 5 美化界面 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+        .config-card { border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .table-container {
+            height: 500px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+        .editable-cell {
+            cursor: pointer;
+            background-color: #fffdf0;
+            transition: background 0.2s;
+        }
+        .editable-cell:hover { background-color: #fff4a3; }
+        .editable-cell:focus {
+            outline: 2px solid #0d6efd;
+            background-color: white;
+            cursor: text;
+        }
+        .tip-text { color: #005fb8; font-size: 0.9rem; }
+        thead { position: sticky; top: 0; background: #eee; z-index: 10; }
+    </style>
+</head>
+<body>
+
+<div class="container py-4">
+    <!-- 路径选择 -->
+    <div class="input-group mb-3">
+        <span class="input-group-text">文件夹路径</span>
+        <input type="text" id="pathInput" class="form-control" placeholder="例如: /media/Anime/轻音少女 (请确保 Docker 已映射此路径)">
+    </div>
+
+    <!-- 命名配置区 -->
+    <div class="card config-card mb-3">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-3 text-muted">命名配置</h6>
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">番剧名称</span>
+                        <input type="text" id="showName" class="form-control">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="input-group">
+                        <span class="input-group-text">第几季</span>
+                        <input type="number" id="season" class="form-control" value="1">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">命名格式</span>
+                        <input type="text" id="format" class="form-control" value="{n} S{s}E{e}">
+                    </div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-primary w-100" onclick="generatePreview()">生成预览</button>
+                </div>
+                <div class="col-12 text-muted" style="font-size: 0.85rem;">
+                    变量提示: {n} 名称, {s} 季, {e} 集
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预览表格 -->
+    <div class="table-container mb-3">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th width="50%">原文件名 (不可编辑)</th>
+                    <th width="50%">新文件名 (点击单元格直接编辑纠错 ✏️)</th>
+                </tr>
+            </thead>
+            <tbody id="previewBody">
+                <!-- 动态填充内容 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 底部操作区 -->
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="tip-text">提示: 若自动识别错误，直接点击右侧黄色单元格即可手动修改结果。</div>
+        <button id="renameBtn" class="btn btn-success px-5" disabled onclick="executeRename()">确认并执行重命名</button>
+    </div>
+</div>
+
+<script>
+    // 1. 生成预览逻辑
+    async function generatePreview() {
+        const data = {
+            path: document.getElementById('pathInput').value,
+            show_name: document.getElementById('showName').value,
+            season: parseInt(document.getElementById('season').value),
+            format: document.getElementById('format').value
+        };
+
+        if(!data.path || !data.show_name) {
+            alert("请填写路径和番剧名称！");
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                renderTable(result.plan);
+            } else {
+                alert("错误: " + result.detail);
+            }
+        } catch (err) {
+            alert("无法连接到服务器，请检查后端是否启动。");
+        }
+    }
+
+    // 2. 渲染表格
+    function renderTable(plan) {
+        const tbody = document.getElementById('previewBody');
+        tbody.innerHTML = '';
+
+        plan.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="text-break">${item.old_name}</td>
+                <td class="editable-cell text-break" contenteditable="true" data-index="${index}">${item.new_name}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        document.getElementById('renameBtn').disabled = plan.length === 0;
+    }
+
+    // 3. 执行重命名
+    async function executeRename() {
+        const path = document.getElementById('pathInput').value;
+        const rows = document.querySelectorAll('#previewBody tr');
+        const tasks = [];
+
+        rows.forEach(row => {
+            tasks.push({
+                old_name: row.cells[0].innerText,
+                new_name: row.cells[1].innerText
+            });
+        });
+
+        if (!confirm(`确定重命名这 ${tasks.length} 个文件吗？`)) return;
+
+        try {
+            const response = await fetch('/api/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, tasks })
+            });
+            const result = await response.json();
+            alert(`操作完成！成功: ${result.success_count}, 失败: ${result.total - result.success_count}`);
+            generatePreview(); // 刷新预览
+        } catch (err) {
+            alert("执行失败: " + err);
+        }
+    }
+</script>
+
+</body>
+</html>
