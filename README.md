@@ -33,7 +33,6 @@
 
 ## 📸 软件截图
 
-*(建议在此处上传你的 Web 界面截图，命名为 `screenshot.png` 放在 assets 文件夹)*
 <img width="1704" height="1060" alt="image" src="https://github.com/user-attachments/assets/46c51cf5-423d-410e-83ed-d41e63ba7fba" />
 
 
